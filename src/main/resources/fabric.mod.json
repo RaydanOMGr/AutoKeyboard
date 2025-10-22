@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "autokeyboard",
+  "version": "${version}",
+  "name": "AutoKeyboard",
+  "description": "Mod that automatically opens the keyboard when focusing an input field on PojavLauncher!",
+  "authors": [
+    "AndreasMelone"
+  ],
+  "contact": {},
+  "license": "LGPL-3.0",
+  "icon": "assets/autokeyboard/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["me.andreasmelone.autokeyboard.AutokeyboardClient"]
+  },
+  "mixins": [
+    "autokeyboard.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "*"
+  }
+}
