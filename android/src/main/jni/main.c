@@ -64,31 +64,19 @@ jobject getAppClassLoader(JNIEnv* env) {
                                                             currentActivityThreadMethod);
     if (!activityThread) return NULL;
 
-    jfieldID mBoundApplicationField = (*env)->GetFieldID(env, activityThreadClass,
-                                                         "mBoundApplication",
-                                                         "Landroid/app/ActivityThread$AppBindData;");
-    if (!mBoundApplicationField) return NULL;
+    jmethodID getApplicationMethod = (*env)->GetMethodID(env, activityThreadClass, "getApplication", "()Landroid/app/Application;");
+    if(!getApplicationMethod) return NULL;
 
-    jobject appBindData = (*env)->GetObjectField(env, activityThread, mBoundApplicationField);
-    if (!appBindData) return NULL;
+    jobject application = (*env)->CallObjectMethod(env, activityThread, getApplicationMethod);
+    if(!application) return NULL;
 
-    jclass appBindDataClass = (*env)->GetObjectClass(env, appBindData);
-    jfieldID infoField = (*env)->GetFieldID(env, appBindDataClass,
-                                            "info",
-                                            "Landroid/app/LoadedApk;");
-    if (!infoField) return NULL;
+    jclass contextClass = (*env)->FindClass(env, "android/content/Context");
+    if(!contextClass) return NULL;
 
-    jobject appInfo = (*env)->GetObjectField(env, appBindData, infoField);
-    if (!appInfo) return NULL;
+    jmethodID getClassLoaderMethod = (*env)->GetMethodID(env, contextClass, "getClassLoader", "()Ljava/lang/ClassLoader;");
+    if(!getClassLoaderMethod) return NULL;
 
-    jclass appInfoClass = (*env)->GetObjectClass(env, appInfo);
-    jfieldID classLoaderField = (*env)->GetFieldID(env, appInfoClass,
-                                                   "mClassLoader",
-                                                   "Ljava/lang/ClassLoader;");
-    if (!classLoaderField) return NULL;
-
-    jobject classLoader = (*env)->GetObjectField(env, appInfo, classLoaderField);
-    return classLoader;
+    return (*env)->CallObjectMethod(env, application, getClassLoaderMethod);
 }
 
 int init() {
