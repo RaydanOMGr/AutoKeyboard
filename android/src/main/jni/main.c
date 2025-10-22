@@ -7,7 +7,9 @@
 #include <jni.h>
 #include <dlfcn.h>
 #include <string.h>
+#include <android/log.h>
 #include "environ/environ.h"
+#include "dlfake/fake_dlfcn.h"
 
 #define INIT_SUCCESS 0x00
 #define INIT_GENERIC_ERROR 0xFFFFFFFF
@@ -19,9 +21,10 @@
 
 typedef  jint(*jni_getvms_t)(JavaVM**, jsize, jsize*);
 
-JavaVM *vm;
+JavaVM *game_vm;
+JavaVM *dalvik_vm;
 char *dex_data;
-size_t dex_size;
+size_t dex_size = 0;
 
 jobject object_classLoader;
 jmethodID method_loadClass;
@@ -29,15 +32,26 @@ jmethodID method_loadClass;
 jclass class_mainClass;
 jmethodID method_openKeyboard;
 
-jni_getvms_t getVMFunction_libnativehelper() {
+// get vm functions stolen from https://github.com/artdeell/AutoWax4C
+jni_getvms_t getVMFunction_fake() {
+    void* library = fake_dlopen("libart.so", 0);
+    if(library == NULL) {
+        printf("[AutoKeyboard/VMFinder] Google trolling failed. Giving up.\n");
+        return NULL;
+    }
+    void* sym = fake_dlsym(library, "JNI_GetCreatedJavaVMs");
+    fake_dlclose(library);
+    return (jni_getvms_t)sym;
+}
+jni_getvms_t getVMFunction() {
     void* library = dlopen("libnativehelper.so", RTLD_LAZY);
     if(library == NULL) {
-        printf("Failed to load libnativehelper\n");
-        return NULL;
+        printf("[AutoKeyboard/VMFinder] Time to troll Google!\n");
+        return getVMFunction_fake();
     }
     void* sym = dlsym(library, "JNI_GetCreatedJavaVMs");
     dlclose(library);
-    return (jni_getvms_t) sym;
+    return sym == NULL ? getVMFunction_fake() : (jni_getvms_t) sym;
 }
 
 jclass LoadClass(JNIEnv* env, const char* name) {
@@ -45,7 +59,7 @@ jclass LoadClass(JNIEnv* env, const char* name) {
                                                      (*env)->NewStringUTF(env, name));
     if ((*env)->ExceptionCheck(env)) {
         (*env)->ExceptionDescribe(env);
-        printf("Failed to load %s\n", name);
+        printf("[AutoKeyboard/LoadClass] Failed to load %s\n", name);
         return NULL;
     }
     return clazz;
@@ -79,87 +93,79 @@ jobject getAppClassLoader(JNIEnv* env) {
     return (*env)->CallObjectMethod(env, application, getClassLoaderMethod);
 }
 
-int init() {
-    if(!dex_data) {
-        return INIT_DEX_NOT_INITIALIZED;
-    }
-
-    JNIEnv *env;
-    if(pojav_environ != NULL && pojav_environ->dalvikJavaVMPtr != NULL) {
-        vm = pojav_environ->dalvikJavaVMPtr;
-    } else {
-        jsize cnt;
-        jni_getvms_t JNI_GetCreatedJavaVMs_p = getVMFunction_libnativehelper();
-        if(!JNI_GetCreatedJavaVMs_p || JNI_GetCreatedJavaVMs_p(&vm, 1, &cnt) != JNI_OK || cnt == 0) {
-            printf("Failed to find a JVM\n");
-            return INIT_DVM_NOT_FOUND;
-        }
-    }
-
-    jint result = (*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6);
-    if (result == JNI_EDETACHED) {
-        result = (*vm)->AttachCurrentThread(vm, &env, NULL);
-    }
-    if (result != JNI_OK) {
-        printf("Can't get a JNIEnv\n");
-        return INIT_DVM_NOT_FOUND;
-    }
-
-    jclass class_InMemoryClassLoader = (*env)->FindClass(env, "dalvik/system/InMemoryDexClassLoader");
-    if(!class_InMemoryClassLoader || (*env)->ExceptionCheck(env)) {
-        (*env)->ExceptionDescribe(env);
-        printf("Can't find the class loader\n");
-        return INIT_GENERIC_ERROR;
-    }
-    jclass class_Class = (*env)->FindClass(env, "java/lang/Class");
-    if(!class_Class || (*env)->ExceptionCheck(env)) {
-        (*env)->ExceptionDescribe(env);
-        printf("Can't find the Class class\n");
-        return INIT_GENERIC_ERROR;
-    }
-
-    jmethodID constructor_InMemoryClassLoader = (*env)->GetMethodID(env, class_InMemoryClassLoader, "<init>", "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
-    method_loadClass = (*env)->GetMethodID(env, class_InMemoryClassLoader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
-    if(!constructor_InMemoryClassLoader || !method_loadClass){
-        printf("Can't find the class methods\n");
-        return INIT_GENERIC_ERROR;
-    }
-    jobject byteBuffer = (*env)->NewDirectByteBuffer(env, dex_data, dex_size);
-    if(!byteBuffer) {
-        printf("Can't create the byte buffer\n");
-        return INIT_GENERIC_ERROR;
-    }
-    jobject appClassLoader = getAppClassLoader(env);
-    if(appClassLoader == NULL) {
-        printf("Failed to retrieve app classloader!\n");
-        return INIT_GENERIC_ERROR;
-    }
-    object_classLoader = (*env)->NewObject(env, class_InMemoryClassLoader, constructor_InMemoryClassLoader, byteBuffer, appClassLoader);
-    if((*env)->ExceptionCheck(env)) {
-        (*env)->ExceptionDescribe(env);
-        printf("Failed to create class loader\n");
-        return INIT_GENERIC_ERROR;
-    }
-    object_classLoader = (*env)->NewGlobalRef(env, object_classLoader);
-    jclass mainClass = LoadClass(env,"me.andreasmelone.pojavintegrate.pojav.PojavIntegrateAndroid");
-    if(!mainClass) {
-        printf("Failed to load main class\n");
-        return INIT_GENERIC_ERROR;
-    }
-    printf("ClassLoader class = %p\n", mainClass);
-    class_mainClass = (jclass) (*env)->NewGlobalRef(env, mainClass);
-    method_openKeyboard = (*env)->GetStaticMethodID(env, class_mainClass, "setKeyboardOpen", "(Z)V");
-    if(!method_openKeyboard) {
-        printf("Failed to get setKeyboardOpen(Z)V method\n");
-        return INIT_METHOD_NOT_INITIALIZED;
-    }
-    return INIT_SUCCESS;
-}
-
 JNIEXPORT jint JNICALL
 Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_init(JNIEnv *env,
                                                                           jclass clazz) {
-    return init();
+    (*env)->GetJavaVM(env, &game_vm);
+    if(!dex_data || dex_size == 0) {
+        return INIT_DEX_NOT_INITIALIZED;
+    }
+
+    JNIEnv *dalvik_env;
+
+    jsize cnt;
+    jni_getvms_t JNI_GetCreatedJavaVMs_p = getVMFunction();
+    if(!JNI_GetCreatedJavaVMs_p || JNI_GetCreatedJavaVMs_p(&dalvik_vm, 1, &cnt) != JNI_OK || cnt == 0) {
+        printf("[AutoKeyboard/Init] Failed to find a JVM\n");
+        if(pojav_environ == NULL || pojav_environ->dalvikJavaVMPtr == NULL) return INIT_DVM_NOT_FOUND;
+        dalvik_vm = pojav_environ->dalvikJavaVMPtr;
+        printf("[AutoKeyboard/Init] If the game crashes after this message, the pojav_environ is incompatible with the mod. "
+               "This means that you should remove the AutoKeyboard mod, switch to a different launcher or try using a different device/Android version.\n");
+    }
+
+    jint result = (*dalvik_vm)->GetEnv(dalvik_vm, (void**)&dalvik_env, JNI_VERSION_1_6);
+    if (result == JNI_EDETACHED) {
+        result = (*dalvik_vm)->AttachCurrentThread(dalvik_vm, &dalvik_env, NULL);
+    }
+    if (result != JNI_OK) {
+        printf("[AutoKeyboard/Init] Can't get a JNIEnv\n");
+        return INIT_DVM_NOT_FOUND;
+    }
+
+    jclass class_InMemoryClassLoader = (*dalvik_env)->FindClass(dalvik_env, "dalvik/system/InMemoryDexClassLoader");
+    if(!class_InMemoryClassLoader || (*dalvik_env)->ExceptionCheck(dalvik_env)) {
+        (*dalvik_env)->ExceptionDescribe(dalvik_env);
+        printf("[AutoKeyboard/Init] Can't find the class loader\n");
+        return INIT_GENERIC_ERROR;
+    }
+
+    jmethodID constructor_InMemoryClassLoader = (*dalvik_env)->GetMethodID(dalvik_env, class_InMemoryClassLoader, "<init>", "(Ljava/nio/ByteBuffer;Ljava/lang/ClassLoader;)V");
+    method_loadClass = (*dalvik_env)->GetMethodID(dalvik_env, class_InMemoryClassLoader, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
+    if(!constructor_InMemoryClassLoader || !method_loadClass){
+        printf("[AutoKeyboard/Init] Can't find the class methods\n");
+        return INIT_GENERIC_ERROR;
+    }
+    jobject byteBuffer = (*dalvik_env)->NewDirectByteBuffer(dalvik_env, dex_data, dex_size);
+    if(!byteBuffer) {
+        printf("[AutoKeyboard/Init] Can't create the byte buffer\n");
+        return INIT_GENERIC_ERROR;
+    }
+    jobject appClassLoader = getAppClassLoader(dalvik_env);
+    if(appClassLoader == NULL) {
+        printf("[AutoKeyboard/Init] Failed to retrieve app classloader!\n");
+        return INIT_GENERIC_ERROR;
+    }
+    object_classLoader = (*dalvik_env)->NewObject(dalvik_env, class_InMemoryClassLoader, constructor_InMemoryClassLoader, byteBuffer, appClassLoader);
+    if((*dalvik_env)->ExceptionCheck(dalvik_env)) {
+        (*dalvik_env)->ExceptionDescribe(dalvik_env);
+        printf("[AutoKeyboard/Init] Failed to create class loader\n");
+        return INIT_GENERIC_ERROR;
+    }
+    object_classLoader = (*dalvik_env)->NewGlobalRef(dalvik_env, object_classLoader);
+    jclass mainClass = LoadClass(dalvik_env, "me.andreasmelone.pojavintegrate.pojav.PojavIntegrateAndroid");
+    if(!mainClass) {
+        printf("[AutoKeyboard/Init] Failed to load main class\n");
+        return INIT_GENERIC_ERROR;
+    }
+    printf("[AutoKeyboard/Init] ClassLoader class = %p\n", mainClass);
+    class_mainClass = (jclass) (*dalvik_env)->NewGlobalRef(dalvik_env, mainClass);
+    method_openKeyboard = (*dalvik_env)->GetStaticMethodID(dalvik_env, class_mainClass, "setKeyboardOpen", "(Z)V");
+    if(!method_openKeyboard) {
+        printf("[AutoKeyboard/Init] Failed to get setKeyboardOpen(Z)V method\n");
+        return INIT_METHOD_NOT_INITIALIZED;
+    }
+
+    return INIT_SUCCESS;
 }
 
 
@@ -175,15 +181,15 @@ Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_setDexData(
     jboolean isCopy;
     jbyte* b = (*env)->GetByteArrayElements(env, data, &isCopy);
     if(!b) {
-        DIE("Failed to get byte array, exiting\n");
+        DIE("[AutoKeyboard/SetDexData] Failed to get byte array, exiting\n");
     }
     jint size = (*env)->GetArrayLength(env, data);
 
     dex_size = size;
-    printf("New byte array size: %zu\n", dex_size);
+    printf("[AutoKeyboard/SetDexData] New byte array size: %zu\n", dex_size);
     dex_data = malloc(size);
     if(!dex_data) {
-        DIE("Failed to allocate memory, exiting\n");
+        DIE("[AutoKeyboard/SetDexData] Failed to allocate memory, exiting\n");
     }
     memcpy(dex_data, b, size);
 
@@ -193,16 +199,17 @@ Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_setDexData(
 JNIEXPORT void JNICALL
 Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_setKeyboardState(JNIEnv *env, jclass clazz, jboolean state) {
     if(!class_mainClass || !method_openKeyboard) {
-        DIE("Main class or open keyboard method not initialized!\n");
+        DIE("[AutoKeyboard/SetKeyboardState] Main class or open keyboard method not initialized!\n");
     }
 
     JNIEnv *dvm;
-    jint result = (*vm)->GetEnv(vm, (void**)&dvm, JNI_VERSION_1_6);
+    jint result = (*dalvik_vm)->GetEnv(dalvik_vm, (void**)&dvm, JNI_VERSION_1_6);
     if (result == JNI_EDETACHED) {
-        result = (*vm)->AttachCurrentThread(vm, &dvm, NULL);
+        result = (*dalvik_vm)->AttachCurrentThread(dalvik_vm, &dvm, NULL);
     }
     if (result != JNI_OK) {
-        DIE("Can't get a JNIEnv\n");
+        printf("[AutoKeyboard/SetKeyboardState] Can't get a JNIEnv\n");
+        return;
     }
 
     (*dvm)->CallStaticVoidMethod(dvm, class_mainClass, method_openKeyboard, state);
