@@ -1,7 +1,7 @@
 package me.andreasmelone.autokeyboard.mixin;
 
 import me.andreasmelone.autokeyboard.AutokeyboardClient;
-import me.andreasmelone.autokeyboard.pojav.PojavIntegrateAndroidNative;
+import me.andreasmelone.autokeyboard.pojav.AutoKeyboardAndroidNative;
 import net.minecraft.client.gui.components.EditBox;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -16,6 +16,6 @@ public abstract class EditBoxMixin {
     )
     public void onFocused(boolean bl, CallbackInfo ci) {
         if(!AutokeyboardClient.isInitializedNative()) return;
-        PojavIntegrateAndroidNative.setKeyboardState(bl);
+        AutoKeyboardAndroidNative.setKeyboardState(bl);
     }
 }

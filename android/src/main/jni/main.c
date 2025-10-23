@@ -94,8 +94,8 @@ jobject getAppClassLoader(JNIEnv* env) {
 }
 
 JNIEXPORT jint JNICALL
-Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_init(JNIEnv *env,
-                                                                          jclass clazz) {
+Java_me_andreasmelone_autokeyboard_pojav_AutoKeyboardAndroidNative_init(JNIEnv *env,
+                                                                        jclass clazz) {
     (*env)->GetJavaVM(env, &game_vm);
     if(!dex_data || dex_size == 0) {
         return INIT_DEX_NOT_INITIALIZED;
@@ -152,7 +152,7 @@ Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_init(JNIEnv
         return INIT_GENERIC_ERROR;
     }
     object_classLoader = (*dalvik_env)->NewGlobalRef(dalvik_env, object_classLoader);
-    jclass mainClass = LoadClass(dalvik_env, "me.andreasmelone.pojavintegrate.pojav.PojavIntegrateAndroid");
+    jclass mainClass = LoadClass(dalvik_env, "me.andreasmelone.autokeyboard.pojav.AutoKeyboardAndroid");
     if(!mainClass) {
         printf("[AutoKeyboard/Init] Failed to load main class\n");
         return INIT_GENERIC_ERROR;
@@ -168,11 +168,14 @@ Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_init(JNIEnv
     return INIT_SUCCESS;
 }
 
-
 JNIEXPORT void JNICALL
-Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_setDexData(JNIEnv *env,
-                                                                                jclass clazz,
-                                                                                jbyteArray data) {
+Java_me_andreasmelone_autokeyboard_pojav_AutoKeyboardAndroidNative_setDexData(JNIEnv *env, jclass clazz, jbyteArray data) {
+    if(!data) {
+        jclass exceptionClass = (*env)->FindClass(env, "java/lang/IllegalArgumentException");
+        (*env)->ThrowNew(env, exceptionClass, "Null data passed!");
+        return;
+    }
+
     if(dex_data) {
         free(dex_data);
         dex_data = NULL;
@@ -197,7 +200,7 @@ Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_setDexData(
 }
 
 JNIEXPORT void JNICALL
-Java_me_andreasmelone_autokeyboard_pojav_PojavIntegrateAndroidNative_setKeyboardState(JNIEnv *env, jclass clazz, jboolean state) {
+Java_me_andreasmelone_autokeyboard_pojav_AutoKeyboardAndroidNative_setKeyboardState(JNIEnv *env, jclass clazz, jboolean state) {
     if(!class_mainClass || !method_openKeyboard) {
         DIE("[AutoKeyboard/SetKeyboardState] Main class or open keyboard method not initialized!\n");
     }

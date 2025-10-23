@@ -1,4 +1,4 @@
-package me.andreasmelone.pojavintegrate.pojav;
+package me.andreasmelone.autokeyboard.pojav;
 
 import android.content.Context;
 import android.support.annotation.Keep;
@@ -11,7 +11,7 @@ import net.kdt.pojavlaunch.customcontrols.keyboard.TouchCharInput;
 
 @Keep
 @SuppressWarnings("unused")
-public class PojavIntegrateAndroid {
+public class AutoKeyboardAndroid {
     @Keep
     public static void setKeyboardOpen(boolean state) {
         try {

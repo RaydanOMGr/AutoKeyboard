@@ -1,9 +1,11 @@
 package me.andreasmelone.autokeyboard.pojav;
 
+import com.mojang.logging.LogUtils;
+
 import org.intellij.lang.annotations.MagicConstant;
 
 @SuppressWarnings("UnsafeDynamicallyLoadedCode")
-public class PojavIntegrateAndroidNative {
+public class AutoKeyboardAndroidNative {
     public static final int INIT_SUCCESS = 0x00;
     public static final int INIT_GENERIC_ERROR = 0xFFFFFFFF;
     public static final int INIT_DEX_NOT_INITIALIZED = 0xFFFFFFFE;
@@ -18,6 +20,8 @@ public class PojavIntegrateAndroidNative {
     public static native void setKeyboardState(boolean state);
 
     static {
-        System.load(AndroidLibLoader.INSTANCE.get("pojavintegrate"));
+        String path = AndroidLibLoader.INSTANCE.get("autokeyboard");
+        LogUtils.getLogger().info("Loading natives from {}", path);
+        System.load(path);
     }
 }

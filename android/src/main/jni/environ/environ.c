@@ -17,5 +17,4 @@ __attribute__((constructor)) void env_init() {
         printf("[AutoKeyboard/Environ] Found existing environ: %s\n", strptr_env);
         pojav_environ = (void*) strtoul(strptr_env, NULL, 0x10);
     }
-    printf("[AutoKeyboard/Environ] %p\n", pojav_environ);
 }

@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace 'me.andreasmelone.pojavintegrate'
+    namespace 'me.andreasmelone.autokeyboard'
     compileSdk 36
 
     ndkVersion = "28.2.13676358"

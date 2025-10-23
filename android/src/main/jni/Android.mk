@@ -1,7 +1,7 @@
 LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE    := pojavintegrate
+LOCAL_MODULE    := autokeyboard
 LOCAL_SRC_FILES := \
     main.c \
     environ/environ.c \

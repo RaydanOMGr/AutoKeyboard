@@ -9,8 +9,8 @@
 
 #define TAG_NAME	"fake_dlfcn"
 
-#define log_info(fmt,args...) do { printf("[AutoKeyboard/"); printf(TAG_NAME); printf("]"); printf((const char *) fmt, ##args); } while(0)
-#define log_err(fmt,args...) do { printf("[AutoKeyboard/"); printf(TAG_NAME); printf("]"); printf((const char *) fmt, ##args); } while(0)
+#define log_info(fmt,args...) do { printf("[AutoKeyboard/" TAG_NAME "] "); printf((const char *) fmt, ##args); } while(0)
+#define log_err(fmt,args...) do { printf("[AutoKeyboard/" TAG_NAME "] "); printf((const char *) fmt, ##args); } while(0)
 
 #ifdef LOG_DBG
 #define log_dbg log_info
